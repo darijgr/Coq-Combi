@@ -59,7 +59,11 @@ Unset Printing Implicit Defensive.
 
 Import LeqGeqOrder.
 
-Local Reserved Notation "''a_' k" (at level 8, k at level 2, format "''a_' k").
+Local Reserved Notation "''a_' k"
+      (at level 8, k at level 2, format "''a_' k").
+Local Reserved Notation "m # s"
+      (at level 40, left associativity, format "m # s").
+
 Local Notation "''II_' n" := ('I_n * 'I_n)%type (at level 8, n at level 2).
 
 
@@ -72,10 +76,17 @@ Section MonomPart.
 Variable n : nat.
 Implicit Type m : 'X_{1.. n}.
 
-Definition mpart (s : seq nat) :=
-  if size s <= n then [multinom (nth 0 s i)%N | i < n] else mnm0.
 Definition dominant : qualifier 0 'X_{1.. n} :=
   [qualify m : 'X_{1.. n} | sorted geq m].
+Definition mpart (s : seq nat) :=
+  if size s <= n then [multinom (nth 0 s i)%N | i < n] else mnm0.
+
+Lemma dominant_eq m1 m2 :
+  m1 \is dominant -> m2 \is dominant -> perm_eq m1 m2 -> m1 = m2.
+Proof.
+rewrite !unfold_in => /sorted_eq H{}/H H{}/H Heq.
+by apply/val_inj/val_inj; apply Heq.
+Qed.
 
 Fact partmP m : is_part (sort geq [seq d <- m | d != 0]).
 Proof.
@@ -152,6 +163,12 @@ case: (ssrnat.ltnP i n) => Hi.
   exact: size_partm.
 Qed.
 
+Lemma mpartE s i : size s <= n -> mpart s i = nth 0 s i.
+Proof. by rewrite /mpart => ->; rewrite mnmE. Qed.
+
+Lemma mpart0 : @mpart [::] = 0%MM.
+Proof. by apply mnmP => i; rewrite /mpart /= mnmE mnm0E nth_default. Qed.
+
 Lemma perm_mpart s1 s2 : perm_eq s1 s2 -> perm_eq (mpart s1) (mpart s2).
 Proof.
 move=> Hperm; have Hsz := perm_size Hperm; rewrite /mpart -Hsz.
@@ -189,12 +206,14 @@ Qed.
 Lemma sumn_mpart sh : size sh <= n -> sumn (mpart sh) = sumn sh.
 Proof.
 move=> Hsz; rewrite /mpart Hsz !sumnE big_tuple.
-rewrite (eq_bigr (fun i : 'I_n => nth 0 sh i)); first last.
-  by move=> i _; rewrite tnth_mktuple.
+under [LHS]eq_bigr do rewrite tnth_mktuple.
 rewrite (big_nth 0) big_mkord (big_ord_widen _ _ Hsz).
 rewrite (bigID (fun i : 'I_n => i < size sh)) /= addnC big1 ?add0n //.
 by move=> i; rewrite -leqNgt; apply: nth_default.
 Qed.
+
+Lemma mdeg_mpart sh : size sh <= n -> mdeg (mpart sh) = sumn sh.
+Proof. by move/sumn_mpart => <-; rewrite sumnE -/(mdeg _). Qed.
 
 Lemma sumn_partm m : sumn (partm m) = mdeg m.
 Proof.
@@ -209,9 +228,7 @@ symmetry; rewrite big_filter /mdeg.
 by rewrite (bigID (fun i => i == 0)) /= big1 ?add0n // => i /eqP.
 Qed.
 
-
-Local Notation "m # s" := [multinom m (s i) | i < n]
-  (at level 40, left associativity, format "m # s").
+Local Notation "m # s" := [multinom m (s i) | i < n].
 
 Lemma mnm_perm m1 m2 : perm_eq m1 m2 -> {s : 'S_n | m1 == m2 # s}.
 Proof.
@@ -389,8 +406,7 @@ apply/issymP => s; rewrite msymM Hp Hq.
 by case: (odd_perm _); rewrite !simplexp // opprK.
 Qed.
 
-Local Notation "m # s" := [multinom m (s i) | i < n]
-  (at level 40, left associativity, format "m # s").
+Local Notation "m # s" := [multinom m (s i) | i < n].
 
 Lemma isantisym_msupp p (s : 'S_n) (m : 'X_{1..n}) : p \is antisym ->
   (m#s \in msupp p) = (m \in msupp p).
@@ -458,8 +474,8 @@ Variable n : nat.
 Variable R : idomainType.
 Hypothesis Hchar : ~~ (2 \in [char R]).
 
-Local Notation "''a_' k" := (@alternpol n R 'X_[k])
-                              (at level 8, k at level 2, format "''a_' k").
+Local Notation "''a_' k" := (@alternpol n R 'X_[k]).
+Local Notation "m # s" := [multinom m (s i) | i < n].
 
 Lemma sym_antisym_char_not2 :
   n >= 2 -> forall p : {mpoly R[n]}, p \is symmetric -> p \is antisym -> p = 0.
@@ -473,11 +489,7 @@ rewrite -mulr2n -mulr_natr mulf_eq0 => /orP [/eqP -> //|] /= /eqP /= H2.
 by exfalso; move: Hchp; rewrite negb_and H2 eq_refl.
 Qed.
 
-
 Definition rho := [multinom (n - 1 - i)%N | i < n].
-
-Local Notation "m # s" := [multinom m (s i) | i < n]
-  (at level 40, left associativity, format "m # s").
 
 Lemma rho_iota : rho = rev (iota 0 n) :> seq nat.
 Proof using.
@@ -627,6 +639,9 @@ Implicit Type (p : 'II_n.+1).
 Local Definition eltrp p := ('s_i p.1, 's_i p.2).
 Local Definition predi p := (p.1 < p.2) && (p != (inord i, inord i.+1)).
 
+Lemma eltrpK : involutive eltrp.
+Proof. by move=> [u v]; rewrite /eltrp !eltrK. Qed.
+
 Lemma predi_eltrp p : i < n -> predi p -> predi (eltrp p).
 Proof using.
 move=> Hi.
@@ -665,11 +680,8 @@ Qed.
 
 Lemma predi_eltrpE p : i < n -> predi p = predi ('s_i p.1, 's_i p.2).
 Proof using.
-move=> Hi; apply/idP/idP; first exact: predi_eltrp.
-set p1 := ( _, _).
-suff -> : p = ('s_i p1.1, 's_i p1.2) by apply predi_eltrp.
-rewrite /p1 /= !eltrK {p1}.
-by case: p.
+move=> Hi; apply/idP/idP => [|H]; first exact: predi_eltrp.
+by rewrite -(eltrpK p) predi_eltrp.
 Qed.
 
 End EltrP.
@@ -686,21 +698,18 @@ rewrite msymM -mulNr; congr (_ * _).
   rewrite msymB opprB.
   by congr (_ - _); rewrite /msym mmapX mmap1U ?eltrL ?eltrR.
 rewrite (big_morph _ (msymM 's_i) (msym1 _ 's_i)) /=.
-rewrite (eq_bigl (fun p : 'II_n.+1 => predi i (eltrp i p))); first last.
-  by move=> [u v]; rewrite -/(predi i (u,v)) (predi_eltrpE (u, v) Hi) /=.
-rewrite (eq_bigr (fun p => 'X_(eltrp i p).1 - 'X_(eltrp i p).2)); first last.
-  by move => [u v] _; rewrite msymB /msym !mmapX !mmap1U.
-rewrite -(big_map _ _ (fun p => ('X_p.1 - 'X_p.2))) /=.
-rewrite /index_enum -enumT /=.
-apply: perm_big.
-have Hin : map (eltrp i) (enum {: 'II_ n.+1}) =i enum {: 'II_ n.+1}.
-  move=> [u v].
-  rewrite mem_enum inE.
-  have -> : (u, v) = eltrp i (eltrp i (u, v)) by rewrite /eltrp /= !eltrK.
-  by apply map_f; rewrite mem_enum inE.
-apply: (uniq_perm _ _ Hin).
-- by rewrite (eq_uniq _ Hin) ?size_map // enum_uniq.
+under [LHS]eq_bigr do rewrite msymB /msym !mmapX !mmap1U.
+under [LHS]eq_bigl => p do rewrite -/(predi i p) (predi_eltrpE p Hi).
+rewrite /= -(big_map _ _ (fun p => ('X_p.1 - 'X_p.2))) /=.
+set L := map _ _; suff Hin : perm_eq L (enum {: 'II_ n.+1}).
+  by rewrite (perm_big _ Hin) big_enum_cond.
+apply: uniq_perm.
+- rewrite {}/L map_inj_uniq; first exact: index_enum_uniq.
+  exact: (can_inj (eltrpK _)).
 - exact: enum_uniq.
+- rewrite /L => [[u v]]; rewrite mem_enum inE.
+  rewrite -(eltrpK i (u,v)).
+  by apply map_f; rewrite mem_index_enum.
 Qed.
 
 Lemma sym_VanprodM n (R : comRingType) (p : {mpoly R[n]}) :
@@ -715,6 +724,8 @@ Variable R : comRingType.
 
 Local Notation Delta := (@Vanprod n R).
 Local Notation "'X_ i" := (@mpolyX n R U_(i)). (* Enforce the base ring *)
+Local Notation rho := (rho n).
+Local Notation "''a_' k" := (alternpol 'X_[k]).
 
 Lemma polyX_inj (i j : 'I_n) : 'X_i = 'X_j -> i = j.
 Proof using.
@@ -731,9 +742,6 @@ Proof using. by apply contra; rewrite subr_eq0 => /eqP /polyX_inj ->. Qed.
 Lemma msuppX1 i : msupp 'X_i = [:: U_(i)%MM].
 Proof using. rewrite msuppE /= unlock /= domU //; exact: oner_neq0. Qed.
 
-Local Notation "''a_' k" := (alternpol 'X_[k])
-                              (at level 8, k at level 2, format "''a_' k").
-Local Notation rho := (rho n).
 Let abound b  : {mpoly R[n]} :=
   \prod_(p : 'II_n | p.1 < p.2 <= b) ('X_p.1 - 'X_p.2).
 Let rbound b := [multinom (b - i)%N | i < n].
@@ -904,7 +912,7 @@ Qed.
 End Vanprod.
 
 Theorem Vanprod_alt_int n :
-  Vanprod = alternpol 'X_[(rho n)] :> {mpoly int[n]}.
+  Vanprod = alternpol 'X_[rho n] :> {mpoly int[n]}.
 Proof.
 rewrite (isantisym_alt _
           (Vanprod_neq0 n _) (Vanprod_anti _ _) (Vanprod_dhomog n _)).
@@ -913,12 +921,11 @@ rewrite (isantisym_alt _
 Qed.
 
 Corollary Vanprod_alt n (R : ringType) :
-  Vanprod = alternpol 'X_[(rho n)] :> {mpoly R[n]}.
+  Vanprod = alternpol 'X_[rho n] :> {mpoly R[n]}.
 Proof.
 have := Vanprod_alt_int n => /(congr1 (map_mpoly (S := R) intr)).
 rewrite /Vanprod raddf_sum rmorph_prod.
-rewrite (eq_bigr (fun i => 'X_i.1 - 'X_i.2)); first last.
-  by move=> [i j] _ /=; rewrite raddfB /= !map_mpolyX.
+under [LHS]eq_bigr => p _ do rewrite raddfB /= !map_mpolyX /=.
 by move ->; apply eq_bigr => s _; rewrite raddfZsign !msymX /= map_mpolyX.
 Qed.
 
@@ -931,8 +938,7 @@ Section VandermondeDet.
 Variable n : nat.
 Variable R : comRingType.
 
-Local Notation "''a_' k" := (@alternpol n R 'X_[k])
-                              (at level 8, k at level 2, format "''a_' k").
+Local Notation "''a_' k" := (@alternpol n R 'X_[k]).
 Local Notation rho := (rho n).
 
 Definition antim (s : seq nat) : 'M[ {mpoly R[n]} ]_n :=
@@ -975,8 +981,8 @@ rewrite /alternpol (reindex_inj invg_inj) /=.
 rewrite raddf_sum /= (bigID (pred1 1%g)) /=.
 rewrite big_pred1_eq odd_permV odd_perm1 expr0 scale1r invg1 msym1m.
 rewrite mcoeffX eq_refl /=.
-rewrite (eq_bigr (fun => 0)); first by rewrite big1_eq addr0.
-move=> s Hs; rewrite mcoeffZ msymX mcoeffX invgK.
+rewrite big1 ?addr0 // => /= s Hs.
+rewrite mcoeffZ msymX mcoeffX invgK.
 suff : [multinom m (s i) | i < n] != m by move=> /negbTE ->; rewrite mulr0.
 move: Hs; apply contra => /eqP; rewrite mnmP => Heq.
 apply/eqP; rewrite -permP => i; rewrite perm1; apply val_inj => /=.

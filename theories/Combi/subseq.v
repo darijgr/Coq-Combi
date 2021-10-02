@@ -24,9 +24,9 @@ following constructor
 
  *)
 Require Import mathcomp.ssreflect.ssreflect.
-From mathcomp Require Import ssreflect ssrbool ssrfun ssrnat.
-From mathcomp Require Import eqtype choice fintype seq path.
-Require Import tools combclass.
+From mathcomp Require Import ssreflect ssrbool ssrfun ssrnat bigop.
+From mathcomp Require Import eqtype choice fintype seq path tuple.
+Require Import tools combclass sorted.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -45,39 +45,58 @@ Implicit Type s w : seq T.
 Implicit Type a b l : T.
 
 Lemma subseq_rcons_eq s w l : subseq s w = subseq (rcons s l) (rcons w l).
-Proof using.
-apply/idP/idP.
-- by rewrite -!cats1 => H; apply: cat_subseq => //=; rewrite (eq_refl _).
-- elim: w s => [|w0 w IHw s] /=.
-  by case=> //= s0 s; case (altP (s0 =P l)) => _ //=; rewrite rcons_nilF.
-- case: s IHw => //= s0 s; case (altP (s0 =P w0)) => _ //= H1 H2; first exact: H1.
-  by rewrite -rcons_cons in H2; apply: H1.
-Qed.
+Proof using. by rewrite -!cats1 subseq_cat2r. Qed.
 
 Lemma subseq_rcons_neq s si w wn :
-  si != wn -> subseq (rcons s si) (rcons w wn) -> subseq (rcons s si) w.
+  si != wn -> subseq (rcons s si) (rcons w wn) = subseq (rcons s si) w.
 Proof using.
-elim: w s si=> [/=| w0 w IHw] s si H.
-- case: s => [| s0 s] /=; first by case: eqP H.
-  by case (altP (s0 =P wn)) => //= ->; rewrite rcons_nilF.
-- case: s => [/=| s0 s].
-  * case eqP => [_ |] _; first exact: sub0seq.
-    by rewrite -[ [:: si] ]/(rcons [::] si); apply (IHw _ _ H).
-  * rewrite !rcons_cons /=; case (altP (s0 =P w0)) => _; first exact (IHw _ _ H).
-    by rewrite -rcons_cons; apply (IHw _ _ H).
-Qed.
-
-Lemma subseq_rev s w : subseq s w -> subseq (rev s) (rev w).
-Proof using.
-elim: w s => [/= s /eqP -> //= | w0 w IHw] s //=.
-case: s => [_ | s0 s /=]; first by rewrite {1}/rev /=; case (rev _).
-rewrite !rev_cons; case eqP => [-> | _].
-- by move/IHw; rewrite -subseq_rcons_eq.
-- move/IHw; rewrite rev_cons => {}IHw; apply: (@subseq_trans _ (rev w) _ _ IHw).
-  exact: subseq_rcons.
+move/negbTE => neq.
+by rewrite -subseq_rev !rev_rcons /= neq -rev_rcons subseq_rev.
 Qed.
 
 End RCons.
+
+Section SubseqSorted.
+
+Variable (T : eqType) (leT : rel T).
+Implicit Type s : seq T.
+
+Lemma sorted_subseqP s1 s2 :
+  transitive leT -> irreflexive leT -> sorted leT s1 -> sorted leT s2 ->
+  reflect {subset s1 <= s2} (subseq s1 s2).
+Proof.
+move=> leT_trans leT_irr s1_sort s2_sort.
+apply (iffP idP) => [|sub_s12]; first exact: mem_subseq.
+apply/subseqP; exists [seq i \in s1 | i <- s2]; first by rewrite size_map.
+apply: (irr_sorted_eq leT_trans leT_irr s1_sort).
+  exact: (sorted_mask leT_trans).
+move=> i; rewrite -filter_mask mem_filter.
+by case: (boolP (i \in s1)) => // /sub_s12 ->.
+Qed.
+
+End SubseqSorted.
+
+Section SubseqSortedIn.
+
+Variable (T : eqType) (leT : rel T).
+Implicit Type s : seq T.
+
+Lemma sorted_subseq_inP s1 s2 :
+  {in s2 & &, transitive leT} -> {in s2, irreflexive leT} ->
+  sorted leT s1 -> sorted leT s2 ->
+  reflect {subset s1 <= s2} (subseq s1 s2).
+Proof.
+move=> leT_tr leT_irr ss1 ss2; apply (iffP idP); first exact: mem_subseq.
+move: leT_tr leT_irr ss1 ss2 => /in3_sig leT_tr /in1_sig leT_irr .
+have /all_sigP[s2' ->] := allss s2 => + + /[dup] subs12.
+have /all_sigP[{subs12}s1 ->] : all (mem s2) s1.
+  by apply/allP => i /subs12 /mapP [[j /= j_in_s2 _ ->{i}]].
+rewrite !sorted_map => ss1 ss2' subs12.
+apply/map_subseq/(sorted_subseqP leT_tr leT_irr ss1 ss2').
+by move=> i /(map_f sval) /subs12 /mapP[j j_in_s2'] /val_inj->.
+Qed.
+
+End SubseqSortedIn.
 
 
 (** * Subsequence of a sequence as a [fintype]                                *)
@@ -86,101 +105,213 @@ We define a dependent type [SubSeq w] and provide it with a Canonical
 [finType] structure
 **)
 
-Section Fintype.
+Section FinType.
 
-Variable (T : countType).
-Implicit Type s w : seq T.
-
-Fixpoint enum_subseqs w :=
-  if w is w0 :: w' then
-    let rec := enum_subseqs w' in [seq w0 :: s | s <- rec ] ++ rec
-  else [:: [::] ].
-
-Lemma cons_in_enum_subseq x0 x s :
-  x0 :: x \in enum_subseqs s -> x0 \in s.
-Proof using.
-elim: s => [//= | s0 s IHs] /=.
-rewrite inE mem_cat => /orP [].
-- move=> /mapP [] x1 _ [] -> _.
-  by rewrite eq_refl.
-- by move/IHs ->; rewrite orbT.
-Qed.
-
-Lemma enum_subseqs_uniq s : uniq s -> uniq (enum_subseqs s).
-Proof using.
-elim: s => [//= | s0 s IHs] /= /andP [] Hs0 /IHs{IHs} Huniq.
-rewrite cat_uniq; apply/and3P; split.
-- by rewrite map_inj_uniq // => i j [].
-- apply/hasP => [] [] x.
-  case: x => [_| x0 x] /=; first by move=> /mapP [] y _.
-  move=> /cons_in_enum_subseq Hs0' /mapP [] y _ [] Hx0 _.
-  by move: Hs0; rewrite -Hx0 Hs0'.
-- exact: Huniq.
-Qed.
-
-Variable (w : seq T).
-
-Lemma enum_subseqsP : all (fun s => subseq s w) (enum_subseqs w).
-Proof using.
-apply/allP; elim: w => [| w0 wtl IHw] s /=.
-  by rewrite mem_seq1 => /eqP ->.
-rewrite mem_cat => /orP [].
-- move/mapP => [] s' /IHw Hsubs -> /=.
-  by rewrite eq_refl.
-- case: s => [//= | s0 s].
-  move=> /IHw Hsubs; case eqP => Hs0.
-  + apply: (@subseq_trans _ (s0 :: s)); first exact: subseq_cons.
-    exact Hsubs.
-  + exact Hsubs.
-Qed.
-
-Lemma mem_enum_subseqs s :
-  subseq s w -> s \in (enum_subseqs w).
-Proof using.
-elim: w s => [| w0 wtl IHw] s /=.
-  by move/eqP ->; rewrite mem_seq1.
-case: s => [/= _ | s0 s].
-- by rewrite mem_cat (IHw [::] (sub0seq wtl)) orbT.
-- have Hinjcons: injective (cons w0) by move=> x1 x2 [].
-  case eqP => [-> | _] H; move: {H} (IHw _ H); rewrite mem_cat.
-  + by rewrite (mem_map Hinjcons) => ->.
-  + by move => ->; rewrite orbT.
-Qed.
+Variables (T : choiceType) (w : seq T).
 
 Structure subseqs : predArgType :=
   Subseqs {subseqsval :> seq T; _ : subseq subseqsval w}.
 Canonical subseqs_subType := Eval hnf in [subType for subseqsval].
 Definition subseqs_eqMixin := Eval hnf in [eqMixin of subseqs by <:].
-Canonical subseqs_eqType := Eval hnf in EqType subseqs subseqs_eqMixin.
+Canonical subseqs_eqType := EqType subseqs subseqs_eqMixin.
 Definition subseqs_choiceMixin := Eval hnf in [choiceMixin of subseqs by <:].
-Canonical subseqs_choiceType := Eval hnf in ChoiceType subseqs subseqs_choiceMixin.
-Definition subseqs_countMixin := Eval hnf in [countMixin of subseqs by <:].
-Canonical subseqs_countType := Eval hnf in CountType subseqs subseqs_countMixin.
-Canonical subseqs_subCountType := Eval hnf in [subCountType of subseqs].
-Let type := sub_undup_finType subseqs_subCountType enum_subseqsP mem_enum_subseqs.
-Canonical subseqs_finType := [finType of subseqs for type].
-Canonical subseqs_subFinType := Eval hnf in [subFinType of subseqs].
+Canonical subseqs_choiceType := ChoiceType subseqs subseqs_choiceMixin.
 
-Lemma subseqsP (s : subseqs) : subseq s w.
+Implicit Type (s : subseqs).
+
+Lemma subseqsP s : subseq s w.
 Proof using. by case: s => /= s. Qed.
-
-Lemma enum_subseqsE :
-  map val (enum subseqs) = undup (enum_subseqs w).
-Proof using. by rewrite /=; apply: enum_sub_undupE. Qed.
-
-Lemma uniq_enum_subseqsE :
-  uniq w -> map val (enum subseqs) = enum_subseqs w.
-Proof using. move/enum_subseqs_uniq/undup_id <-. exact: enum_subseqsE. Qed.
 
 Definition sub_nil  : subseqs := Subseqs (sub0seq w).
 Definition sub_full : subseqs := Subseqs (subseq_refl w).
 
-Lemma size_le (s : subseqs) : size s <= size w.
-Proof using. by case: s => s Ps /=; apply: size_subseq. Qed.
+Lemma to_mask_spec s : {m : (size w).-tuple bool | mask m w == s}.
+Proof.
+move: s => [s subs]; apply/sigW => /=.
+by move: subs => /subseqP [m /eqP szm ->{s}]; exists (Tuple szm).
+Qed.
+Definition to_mask s := let: exist m _ := to_mask_spec s in m.
 
-End Fintype.
+Lemma to_maskK : cancel to_mask (fun m => Subseqs (mask_subseq (val m) w)).
+Proof.
+by rewrite /to_mask => s; case: to_mask_spec => m /eqP eqm; apply val_inj.
+Qed.
 
-Require Import sorted.
+Lemma mask1E x0 i :
+  i < size w -> mask [tuple val x == i | x < size w] w = [:: nth x0 w i].
+Proof.
+move=> lti.
+rewrite [val (mktuple _)](_ : _ = [seq x == i | x <- iota 0 (size w)]);
+  last by rewrite /= (map_comp (pred1 i) val) val_enum_ord.
+elim: w i lti => //= v0 v IHv [_|i /ltnSE lti] /=.
+  rewrite [map _ _](_ : _ = nseq (size v) false) ?mask_false //.
+  apply (eq_from_nth (x0 := false)) => [|i].
+    by rewrite size_map size_iota size_nseq.
+  rewrite size_map => lti; rewrite (nth_map 0) //.
+  by rewrite size_iota in lti; rewrite nth_nseq lti nth_iota.
+by rewrite -(add1n 0) iotaDl -map_comp -{}IHv.
+Qed.
+
+Lemma mask_injP :
+  reflect (injective (fun m : (size w).-tuple bool => mask (val m) w))
+          (uniq w).
+Proof.
+apply (iffP idP) => [w_uniq m1 m2 eqmask |].
+- apply: eq_from_tnth => i; rewrite !(tnth_nth false).
+  have Z : T by case: w i {w_uniq m1 m2 eqmask} => [[]|].
+  have nthE m : (nth false m i) = (nth Z w i \in mask m w).
+    by rewrite in_mask // (mem_nth Z (ltn_ord i)) /= index_uniq.
+  by rewrite !nthE eqmask.
+- case Hw: w => [//|w0 w']; rewrite -Hw => minj.
+  pose f := (fun i : T => [:: i]).
+  apply/(uniqP w0) => i j; rewrite !inE => lti ltj Heq.
+  have {Heq}:= congr1 (cons^~ [::]) Heq.
+  rewrite -!mask1E // => /minj /(congr1 (fun t => tnth t (Ordinal lti))).
+  by rewrite !tnth_mktuple /= eqxx => /esym/eqP.
+Qed.
+
+Lemma Subseqs_maskK :
+  uniq w -> cancel (fun m => Subseqs (mask_subseq (val m) w)) to_mask.
+Proof.
+rewrite /to_mask=> w_uniq m; case: to_mask_spec => m' /= /eqP.
+exact/mask_injP.
+Qed.
+
+Definition subseqs_countMixin := CanCountMixin to_maskK.
+Canonical subseqs_countType := CountType subseqs subseqs_countMixin.
+Definition subseqs_finMixin := CanFinMixin to_maskK.
+Canonical subseqs_finType := FinType subseqs subseqs_finMixin.
+
+Lemma enum_subseqsE :
+  perm_eq
+    (enum {: subseqs})
+    (undup [seq Subseqs (mask_subseq (val m) w) | m : (size w).-tuple bool]).
+Proof.
+apply: uniq_perm; [exact: enum_uniq | exact: undup_uniq |].
+move=> [s subs] /=; rewrite mem_enum inE mem_undup.
+apply/esym/mapP; have /subseqP [m /eqP szm eqs] := subs.
+by exists (Tuple szm); [exact: mem_enum | exact: val_inj].
+Qed.
+
+Lemma val_enum_subseqs :
+  perm_eq
+    (map val (enum {: subseqs}))
+    (undup [seq mask (val m) w | m : (size w).-tuple bool]).
+Proof.
+have /permPl -> := perm_map val enum_subseqsE.
+rewrite -(undup_map_inj val_inj) -map_comp.
+exact: (eq_ind _ (perm_eq _)).
+Qed.
+
+Lemma seq_masks_uniq :
+  uniq w -> uniq [seq mask (val m) w | m : (size w).-tuple bool].
+Proof.
+move=> w_uniq; rewrite map_inj_uniq; first exact: enum_uniq.
+exact/mask_injP.
+Qed.
+
+Lemma subseqs_masks_uniq :
+  uniq w ->
+  uniq [seq Subseqs (mask_subseq (val m) w) | m : (size w).-tuple bool].
+Proof.
+move /seq_masks_uniq => s_uniq.
+by rewrite -(map_inj_uniq val_inj) -map_comp.
+Qed.
+
+End FinType.
+
+
+Section Bigop.
+
+Context {R : Type} {idx : R} {op : Monoid.com_law idx}.
+Local Notation "1" := idx.
+Local Notation "'*%M'" := op (at level 0).
+Local Notation "x * y" := (op x y).
+Context {T : choiceType}.
+
+Lemma big_subseqs (F : seq T -> R) (s : seq T) :
+  uniq s ->
+  \big[*%M/1]_(i : subseqs s) F i =
+  \big[*%M/1]_(m : (size s).-tuple bool) F (mask m s).
+Proof.
+move=> suniq; rewrite -big_enum.
+rewrite (perm_big _ (enum_subseqsE s)) undup_id ?subseqs_masks_uniq //.
+by rewrite big_map big_enum; exact: eq_bigr.
+Qed.
+
+Lemma big_subseqs_cond (P : pred (seq  T)) (F : seq T -> R) (s : seq T) :
+  uniq s ->
+  \big[*%M/1]_(i : subseqs s | P i) F i =
+  \big[*%M/1]_(m : (size s).-tuple bool | P (mask m s)) F (mask m s).
+Proof.
+move=> suniq; rewrite [LHS]big_mkcond [RHS]big_mkcond.
+exact: (big_subseqs (fun i => if P i then F i else 1)).
+Qed.
+
+Lemma big_subseqs0 (F : seq T -> R) :
+  \big[*%M/1]_(i : subseqs [::]) F i = F [::].
+Proof.
+transitivity (\big[*%M/1]_(s <- [:: sub_full [::]]) F s); last by rewrite big_seq1.
+apply: perm_big; apply uniq_perm => //; first exact: index_enum_uniq.
+by move=> [{}s Hs]; rewrite !inE mem_index_enum -val_eqE /= -subseq0 Hs.
+Qed.
+
+Lemma big_subseqs_cons (F : seq T -> R) (a : T) (s : seq T) :
+  uniq (a :: s) ->
+  \big[*%M/1]_(i : subseqs (a :: s)) F i =
+  \big[*%M/1]_(i : subseqs s) F (a :: i) * \big[*%M/1]_(i : subseqs s) F (i).
+Proof.
+move=> asuniq; have := asuniq => /= /andP [_ suniq].
+rewrite !big_subseqs //.
+rewrite [X in X * _](big_subseqs (fun s => F (a :: s))) //.
+rewrite (bigID (fun m => tnth m ord0)) /=; congr( _ * _).
+- rewrite [RHS](eq_big
+                  (fun m => tnth (cons_tuple true m) ord0)
+                  (fun m => F (mask (cons_tuple true m) (a :: s)))) //.
+  apply: (reindex (@cons_tuple _ _ true)); exists (@behead_tuple _ _).
+  + by move=> m _; apply val_inj; case: m => [[|m0 m]].
+  + by move=> m; rewrite inE; case: m => [[|[|] m]]//= Hm _; exact: val_inj.
+- rewrite [RHS](eq_big
+                  (fun m => ~~ tnth (cons_tuple false m) ord0)
+                  (fun m => F (mask (cons_tuple false m) (a :: s)))) //.
+  apply: (reindex (@cons_tuple _ _ false)); exists (@behead_tuple _ _).
+  + by move=> m _; apply val_inj; case: m => [[|m0 m]].
+  + by move=> m; rewrite inE; case: m => [[|[|] m]]//= Hm _; exact: val_inj.
+Qed.
+
+Lemma big_subseqs_cons_cond
+      (F : seq T -> R) (P : pred (seq T)) (a : T) (s : seq T) :
+  uniq (a :: s) ->
+  \big[*%M/1]_(i : subseqs (a :: s) | P i) F i =
+  \big[*%M/1]_(i : subseqs s | P (a :: i)) F (a :: i) *
+  \big[*%M/1]_(i : subseqs s | P i) F (i).
+Proof.
+move=> asuniq.
+rewrite big_mkcond (big_subseqs_cons (fun i => if P i then F i else 1)) //.
+by congr (_ * _); rewrite -big_mkcond.
+Qed.
+
+Lemma big_subseqs_undup (F : seq T -> R) (s : seq T) :
+  idempotent op ->
+  \big[*%M/1]_(i : subseqs s) F i =
+  \big[*%M/1]_(m : (size s).-tuple bool) F (mask m s).
+Proof.
+move=> opid; rewrite -big_enum.
+rewrite (perm_big _ (enum_subseqsE s)) big_undup //.
+by rewrite big_map big_enum; exact: eq_bigr.
+Qed.
+
+Lemma big_subseqs_undup_cond (F : seq T -> R) (P : pred (seq T)) (s : seq T) :
+  idempotent op ->
+  \big[*%M/1]_(i : subseqs s | P i) F i =
+  \big[*%M/1]_(m : (size s).-tuple bool | P (mask m s)) F (mask m s).
+Proof.
+move=> opid; rewrite big_mkcond /=.
+by rewrite (big_subseqs_undup (fun i => if P i then F i else 1)) // big_mkcond.
+Qed.
+
+End Bigop.
+
 
 (** * Relating sub sequences of [iota] and being sorted *)
 Lemma sorted_subseq_iota_rcons s n : subseq s (iota 0 n) = sorted ltn (rcons s n).

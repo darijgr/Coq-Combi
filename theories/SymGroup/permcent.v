@@ -22,9 +22,9 @@ of the conjugacy class of [s].
 Here are the notion defined is this file, where [s] is a fixed permutation on
 a finite type [T]:
 
-- ['CC(s)] == the group of permutation of [T] which commute with [s] and
+- ['CC(s)] == the group of permutations of [T] which commute with [s] and
             stabilize each cycle of [s].
-- [stab_iporbits s] == the group of permutations of [{set T}] which only move
+- [stab_iporbits s] == the group of permutations of [T] which only move
             the cycles of [s] and sends any cycle to a cycle of the same
             length.
 - [inporbits s t] == the permutation induced by [t] on the set of the cycles
@@ -32,7 +32,7 @@ a finite type [T]:
             [stab_iporbits s].
 - [permcycles s P] == a right inverse morphism from [stab_iporbits s] to
             [{perm T}]. If [P] belongs to [stab_iporbits s] then
-            [permcycles s P] si a compatible lifting of [P] in [{perm T}], 
+            [permcycles s P] si a compatible lifting of [P] in [{perm T}],
             otherwise the identity.
 
 - [zcard l] == $\prod_{i \in N} i^m_i * m_i!$ where $m_i$ is the number of
@@ -53,8 +53,8 @@ Here are the main results:
     \big[dprod/1]_(i < #|T|.+1) Sym (porbits s :&: 'SC_i).
   ]
 
-- The centralizer ['C[s]] is the semidirect product of ['CC(s)'] and the lifting of
-  [stab_iporbits s]. Theorem [cent1_permE]:
+- The centralizer ['C[s]] is the semidirect product of ['CC(s)'] and the
+  lifting of [stab_iporbits s]. Theorem [cent1_permE]:
 
   [ 'C[s] = 'CC(s) ><| (permcycles s) @* (stab_iporbits s). ]
 
@@ -68,7 +68,7 @@ Here are the main results:
 
   [ #|classCT l| = n`! %/ zcard l. ]
 
-***************************)
+*******************************************************************************)
 Require Import mathcomp.ssreflect.ssreflect.
 From mathcomp Require Import ssrfun ssrbool eqtype ssrnat seq fintype.
 From mathcomp Require Import tuple path bigop finset div.
@@ -544,8 +544,7 @@ Definition zcard l :=
 
 Lemma zcard_nil : zcard [::] = 1.
 Proof.
-rewrite /zcard big_nil mul1n /=.
-rewrite (eq_bigr (fun => 1)) // big_const /=.
+rewrite /zcard big_nil mul1n /= big_const fact0.
 by rewrite eq_cardT // size_enum_ord /= mul1n.
 Qed.
 
@@ -578,11 +577,9 @@ rewrite  [in RHS](bigD1 (Ordinal Hil)) //=.
 rewrite mulnC (seq.permP Hrem) /= eq_refl /= add1n.
 rewrite factS -!mulnA; congr (_ * _).
 rewrite  [in LHS](bigD1 (Ordinal Hil)) //=; congr (_ * _).
-apply eq_bigr => j Hj; move/seq.permP: Hrem => -> /=.
-(* TODO : Factorize *)
-have : j != i :> nat by [].
-rewrite eq_sym => /negbTE ->.
-by rewrite add0n.
+apply eq_bigr => j; rewrite -val_eqE => /= /negbTE Hij.
+move/seq.permP: Hrem => -> /=.
+by rewrite eq_sym Hij add0n.
 Qed.
 
 Corollary card_cent1_perm s : #|'C[s]| = zcard (cycle_type s).
@@ -590,7 +587,7 @@ Proof using.
 have /esym/sdprod_card <- := cent1_permE s.
 rewrite card_porbitgrpE card_in_imset // ?setIid; first last.
   by apply: can_in_inj; exact: permcyclesK.
-by rewrite /zcard card_stab_iporbits // intpartn_sumn.
+by rewrite /zcard card_stab_iporbits // sumn_intpartn.
 Qed.
 
 Theorem card_class_perm s :

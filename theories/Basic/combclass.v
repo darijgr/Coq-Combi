@@ -19,7 +19,7 @@ The goal of this file is to define various way to easily build finite
 subtype of a countable type knowing a lists of its elements. We provide four
 ways, three from a list (see [sub_subFinType], [sub_uniq_subFinType] and
 [sub_undup_subFinType] below) and one by taking the disjoint union of already
-constructed subfintypes (see [union_subFinType] below].  *)
+constructed subfintypes (see [union_subFinType] below).  *)
 
 Require Import mathcomp.ssreflect.ssreflect.
 From mathcomp Require Import ssrbool ssrfun ssrnat eqtype fintype choice seq.
@@ -49,27 +49,15 @@ Qed.
 
 End BijCard.
 
+
 (** Summing [count_mem] in a [finType] *)
 Lemma sum_count_mem (T : finType) (P : pred T) l :
   \sum_(i | P i) (count_mem i) l = count P l.
 Proof.
-have [s H1 [H2 H3] /= [H4 H5]]:= big_enumP P.
-rewrite -size_filter -H1 -(eq_filter H3).
-elim: s H2 {H1 H3 H4 H5} => [_ | p1 p IHp].
-  rewrite big_nil (eq_filter (a2 := pred0)); first by rewrite filter_pred0.
-  by move=> i /=; apply: in_nil.
-rewrite big_cons => /= /andP [] Hp1 /IHp{IHp} ->.
-rewrite size_filter.
-rewrite (eq_count (a1 := mem (p1 :: p))
-                  (a2 := predU (pred1 p1) (mem p))); first last.
-  by move => i; rewrite /= in_cons.
-rewrite -[RHS]addn0.
-have /eq_count/(_ l) : predI (pred1 p1) (mem p) =1 pred0.
-  move=> i /=; apply/negP => /andP [/eqP -> Hp1'].
-  by rewrite Hp1' in Hp1.
-rewrite count_pred0 => <-.
-by rewrite count_predUI size_filter.
+rewrite uniq_sum_count_mem; last exact: index_enum_uniq.
+by apply: eq_count => x /=; rewrite mem_index_enum.
 Qed.
+
 
 (** * Building subtype from a sequence
 
@@ -163,12 +151,6 @@ Qed.
 Definition sub_uniq_finMixin := Eval hnf in sub_finMixin Hallp Hcount.
 Definition sub_uniq_finType := Eval hnf in FinType TP sub_uniq_finMixin.
 Definition sub_uniq_subFinType := Eval hnf in [subFinType of sub_uniq_finType].
-
-Lemma enum_sub_uniqE : map val (enum sub_uniq_finType) = lst.
-Proof using. by rewrite enumT unlock /= subType_seqP. Qed.
-
-Lemma card_sub_uniqE : #|sub_uniq_finType| = size lst.
-Proof using. by rewrite cardE -(size_map val) /= enum_subE. Qed.
 
 End SubUniq.
 
@@ -302,9 +284,7 @@ rewrite cardE -(size_map val) /= enum_unionE.
 rewrite /enum_union size_flatten /shape -map_comp.
 rewrite (eq_map (f2 := fun i => #|TPi i|)); first last.
   by move=> i; rewrite /= size_map cardE.
-rewrite /index_enum -enumT.
-elim: (enum TPI) => [| i0 I IHI] /=; first by rewrite big_nil.
-by rewrite big_cons IHI.
+by rewrite sumn_mapE big_enum.
 Qed.
 
 End SubtypesDisjointUnion.

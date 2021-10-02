@@ -31,8 +31,8 @@ We fix two groups [G] and [H]. Then we define:
 
 The tower of the symmetric groups
 
-- [tinj]     == the tower injection morphism : 'S_m * 'S_n -> 'S_(m + n)
-- [f \o^ g]  == the image along tinj of external product of f g.
+- [tinj]     == the tower injection morphism : ['S_m * 'S_n -> 'S_(m + n)]
+- [f \o^ g]  == the image along [tinj] of the external product of [f] and [g].
 
 Induction and restriction of class functions
 
@@ -40,26 +40,23 @@ Induction and restriction of class functions
                 permutation of cycle type [p] in [algC], that is
                 [#|'S_k| / #|class p|].
 - ['1z_p] = [ncfuniCT p] == the normalized cycle indicator class function
-                for cycle type [p].
+                for cycle type [p] == ['z_p *: '1_[p]].
 
 The two main results are:
 
 - Theorem [cfuni_Res] which expands the restriction to ['S_m * 'S_n]
   of the cycle indicator class function ['1_[l]]:
-
-  [
+[[
     'Res[tinj @* ('dom tinj)] '1_[l] =
-    \sum_(pp | l == pp.1 +|+ pp.2) '1_[pp.1] \o^ '1_[pp.2].
-  ]
-
+      \sum_(pp | l == pp.1 +|+ pp.2) '1_[pp.1] \o^ '1_[pp.2].
+]]
   by Frobenius duality it implies:
 
 - Theorem [ncfuniCT_Ind] which expands the induction of two normalized
-  cycle indicator class functions
-
-  [
+  cycle indicator class functions:
+[[
     'Ind['SG_(m + n)] ('1z_[p] \o^ '1z_[q]) = '1z_[p +|+ q].
-  ]
+]]
 ***************)
 
 Require Import mathcomp.ssreflect.ssreflect.
@@ -115,6 +112,21 @@ Variables (G : {group gT}) (H : {group aT}).
 
 Local Open Scope ring_scope.
 
+(** One could use the following alternative definition
+[[
+Definition cast_cf (G H : {set gT}) (eq_GH : G = H) (f : 'CF(G)) :=
+  let: erefl in _ = H := eq_GH return 'CF(H) in f.
+Definition cfextprod (g : 'CF(G)) (h : 'CF(H)) : 'CF(setX G H) :=
+  (cfMorph (cast_cf (esym (@morphim_fstX _ _ G H)) g)) *
+  (cfMorph (cast_cf (esym (@morphim_sndX _ _ G H)) h)).
+]]
+and prove the equivalence:
+[[
+Lemma cfextprodE g h x y : (g \ox h) (x, y) = (g x) * (h y).
+]]
+However, the more direct definition below leads to simpler proofs, at least
+once we have proved that it is indeed a class function.
+ *********)
 Lemma cfextprod_subproof (g : 'CF(G)) (h : 'CF(H)) :
   is_class_fun <<setX G H>> [ffun x => g x.1 * h x.2].
 Proof using.
@@ -244,11 +256,12 @@ Definition tinjval (s : 'S_m * 'S_n) :=
 Fact tinjval_inj s : injective (tinjval s).
 Proof using.
 rewrite /tinjval => x y.
-case: {2 3}(split x) (erefl (split x)) => [] a Ha;
-  case: {2 3} (split y) (erefl (split y)) => [] b Hb;
-    move=> /(congr1 (@split _ _)); rewrite !unsplitK => [] // [];
-    move=> /perm_inj Hab; subst a;
-    by rewrite -(splitK x) Ha -Hb splitK.
+case: (split_ordP x) => xs ->{x} /=;
+  case: (split_ordP y) => ys ->{y} /=.
+- by move=> /lshift_inj/perm_inj ->.
+- by move/eqP; rewrite eq_lrshift.
+- by move/eqP; rewrite eq_rlshift.
+- by move=> /rshift_inj/perm_inj ->.
 Qed.
 Definition tinj s : 'S_(m + n) := perm (@tinjval_inj s).
 
@@ -292,7 +305,7 @@ by rewrite (_: rshift _ _ = unsplit (y _)) // unsplitK.
 Qed.
 
 Lemma porbit_tinj_lshift s a :
-  porbit (tinj s) (lshift n a) = imset (lshift n) (mem (porbit s.1 a)).
+  porbit (tinj s) (lshift n a) = [set @lshift m n x | x in porbit s.1 a].
 Proof using.
 apply/setP => /= Y.
 apply/porbitP/imsetP => /= [[i ->]|[y]].
@@ -303,7 +316,7 @@ apply/porbitP/imsetP => /= [[i ->]|[y]].
 Qed.
 
 Lemma porbit_tinj_rshift s a :
-  porbit (tinj s) (rshift m a) = imset (@rshift m n) (mem (porbit s.2 a)).
+  porbit (tinj s) (rshift m a) = [set @rshift m n x | x in porbit s.2 a].
 Proof using.
 apply/setP => /= Y.
 apply/porbitP/imsetP => /= [[i ->]|[y]].
@@ -320,16 +333,15 @@ Lemma porbits_tinj s :
     [set (@rshift m n) @: x | x : {set 'I_n} in porbits s.2].
 Proof using.
 apply/setP => S; rewrite /porbits inE.
-apply/imsetP/orP => [[x _ ->{S}] | [] /imsetP [T /imsetP [x _] ->{T}] ->{S}].
+apply/imsetP/orP => [[x _ ->{S}] | [] /imsetP[T /imsetP[x _] ->{T}] ->{S}].
 - rewrite -(splitK x); case: splitP => j _ {x}.
   + left; apply/imsetP; exists (porbit s.1 j) => /=; first exact: imset_f.
     exact: porbit_tinj_lshift.
   + right; apply/imsetP; exists (porbit s.2 j) => /=; first exact: imset_f.
     exact: porbit_tinj_rshift.
-  - by exists (lshift n x); rewrite // porbit_tinj_lshift.
-  - by exists (rshift m x); rewrite // porbit_tinj_rshift.
+  - by exists (lshift n x); last by rewrite porbit_tinj_lshift.
+  - by exists (rshift m x); last by rewrite porbit_tinj_rshift.
 Qed.
-
 
 Lemma cycle_type_tinj s : ct (tinj s) = ct s.1 +|+ ct s.2.
 Proof using.
@@ -342,9 +354,9 @@ rewrite porbits_tinj setpart_shape_union; first last.
   move/setP => /(_ (lshift n x)).
   rewrite imset_f; last exact: porbit_id.
   move=> /esym/imsetP => [] [z _] /eqP.
-  by rewrite (negbTE (lrshift_neq _ _)).
+  by rewrite eq_lrshift.
 by congr sort; rewrite /ct !cast_intpartnE /=; congr (_ ++ _);
-  apply setpart_shape_inj; [exact: lshift_inj | exact: rshift_inj].
+  apply setpart_shape_imset; [exact: lshift_inj | exact: rshift_inj].
 Qed.
 
 End TowerMorphism.
@@ -506,12 +518,10 @@ Proof.
 rewrite /cfdot /= -mulrA; congr (_ * _).
 case: (altP (p1 =P p2)) => [<-{p2} | /negbTE Hneq]; rewrite /= ?mulr1 ?mulr0.
 - rewrite (bigID (fun x => x \in classCT p1)) /=.
-  rewrite (eq_bigr (fun => 1)); first last.
-    move=> i => /andP [_].
+  under eq_bigr => i /andP [_].
     rewrite -classCTP !cfuniCTE => -> /=.
-    by rewrite mul1r conjC1.
-  rewrite sumr_const /= big1 ?addr0; first last.
-    move=> i => /andP [_].
+    by rewrite mul1r conjC1 over.
+  rewrite sumr_const /= big1 ?addr0; first last => [i /andP [_]|].
     rewrite -classCTP !cfuniCTE => /negbTE -> /=.
     by rewrite mul0r.
   congr _%:R; apply eq_card => /= x.

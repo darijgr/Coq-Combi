@@ -33,8 +33,44 @@ Section PermComp.
 Variable T : finType.
 Implicit Type (s : {perm T}) (X : {set T}) (P : {set {set T}}).
 
-Lemma setactC (aT : finGroupType) (D : {set aT})
-      (rT : finType) (to : action D rT) S a :
+(** TODO : submitted to mathcomp *)
+Lemma porbitV s : porbit s^-1 =1 porbit s.
+Proof.
+move=> x; apply/setP => y; rewrite porbit_sym.
+by apply/porbitP/porbitP => [][i ->]; exists i; rewrite expgVn ?permK ?permKV.
+Qed.
+
+(** TODO : submitted to mathcomp *)
+Lemma porbitsV s : porbits s^-1 = porbits s.
+Proof.
+rewrite /porbits; apply/setP=> y.
+by apply/imsetP/imsetP => [] [x _ ->{y}]; exists x; rewrite // porbitV.
+Qed.
+
+Lemma permKP s : reflect (involutive s) (s^-1 == s).
+Proof.
+apply (iffP eqP) => [ssV i | invs].
+- by rewrite -{1}ssV permK.
+- rewrite -permP => i; apply (@perm_inj _ s).
+  by rewrite invs permKV.
+Qed.
+
+End PermComp.
+
+
+Section SetAct.
+
+Variables (aT : finGroupType) (D : {set aT}) (rT : finType) (to : action D rT).
+
+(** TODO: complete setactU, setactI, setactD ... and submit to mathcomp *)
+Lemma setact1 x a : to^* [set x] a = [set to x a].
+Proof using. by rewrite /setact imset_set1. Qed.
+Lemma setactI S T a : to^* (S :&: T) a = to^* S a :&: to^* T a.
+Proof. by rewrite /setact imsetI //; apply: in2W; apply: act_inj. Qed.
+Lemma setactU S T a : to^* (S :|: T) a = to^* S a :|: to^* T a.
+Proof. by rewrite /setact imsetU //; apply: in2W; apply: act_inj. Qed.
+
+Lemma setactC S a :
   to^* (~: S) a = ~: to^* S a.
 Proof using.
 apply/eqP; rewrite eqEcard; apply/andP; split.
@@ -44,7 +80,7 @@ apply/eqP; rewrite eqEcard; apply/andP; split.
   by rewrite cardsCs setCK card_setact.
 Qed.
 
-End PermComp.
+End SetAct.
 
 
 Section PermOnG.
@@ -52,16 +88,13 @@ Section PermOnG.
 Variable T : finType.
 Implicit Type (s t c : {perm T}).
 
-
-Lemma restr_perm_commute C s : commute (restr_perm C s) s.
+(** TODO : submitted to mathcomp *)
+Lemma perm_onV H s : perm_on H s -> perm_on H s^-1.
 Proof using.
-case: (boolP (s \in 'N(C | 'P))) =>
-    [HC | /triv_restr_perm ->]; last exact: (commute_sym (commute1 _)).
-apply/permP => x; case: (boolP (x \in C)) => Hx; rewrite !permM.
-- by rewrite !restr_permE //; move: HC => /astabsP/(_ x)/= ->.
-- have:= restr_perm_on C s => /out_perm Hout.
-  rewrite (Hout _ Hx) {}Hout //.
-  by move: Hx; apply contra; move: HC => /astabsP/(_ x)/= ->.
+rewrite /perm_on => /subsetP Hsub; apply/subsetP => i.
+rewrite inE => Hi; apply Hsub; rewrite inE.
+move: Hi; apply contra => /eqP {1}<-.
+by rewrite permK.
 Qed.
 
 End PermOnG.

@@ -15,7 +15,7 @@
 (******************************************************************************)
 (** * Free Schur functions
 
-This file is the second step to the proof of the Littewood-Richardson rule.
+This file is the second step of the proof of the Littewood-Richardson rule.
 We translate theorem [LRtriple_cat_equiv] in a algebraic setting. Specifically,
 the main goal of this file is to lift the multiplication of Schur multivariate
 polynomials to the non commutative setting.
@@ -80,7 +80,7 @@ Invariance with the choice of Q1 and Q2:
 ****************************************************************************)
 Require Import mathcomp.ssreflect.ssreflect.
 From mathcomp Require Import ssrfun ssrbool eqtype ssrnat seq fintype.
-From mathcomp Require Import tuple finfun bigop finset ssralg.
+From mathcomp Require Import order tuple finfun bigop finset ssralg.
 From SsrMultinomials Require Import ssrcomplements freeg mpoly.
 
 Require Import tools ordtype partition Yamanouchi std tableau stdtab.
@@ -91,6 +91,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Import Order.TTheory.
 Local Open Scope ring_scope.
 Import GRing.Theory.
 
@@ -133,9 +134,7 @@ Lemma catlangM d1 d2 (s1 : homlang d1) (s2 : homlang d2) :
   polylang s1 * polylang s2 = polylang (catlang s1 s2).
 Proof using .
 rewrite /polylang /catlang mulr_suml.
-transitivity (\sum_(u in s1) \sum_(v in s2) commword (cat_tuple u v)).
-  apply eq_bigr=> u _; rewrite mulr_sumr.
-  by apply: eq_bigr => t _; rewrite commword_morph.
+under eq_bigr do [rewrite mulr_sumr; under eq_bigr do rewrite -commword_morph].
 rewrite pair_big /=.
 rewrite -(big_imset (h := fun p => cat_tuple p.1 p.2) commword) /=;
   last by move=> [u v] [x y] /= _ _; apply: cat_tuple_inj.
@@ -153,7 +152,7 @@ End CommutativeImage.
 (** ** Row reading of tableau *)
 Section TableauReading.
 
-Variable A : inhOrdType.
+Context {disp : unit} {A : inhOrderType disp}.
 
 Definition tabsh_reading_RS (sh : seq nat) (w : seq A) :=
   (to_word (RS w) == w) && (shape (RS (w)) == sh).
@@ -224,7 +223,7 @@ Lemma tabword_of_tuple_freeSchur_inj (Q : stdtabn d) :
 Proof using .
 move=> /= u v.
 rewrite /freeSchur !inE => /eqP Hu /eqP Hv /(congr1 (@tval _ _)) /= H.
-case: (bijRStab [inhOrdType of 'I_n]) => RSinv HK _.
+case: (bijRStab [inhOrderType of 'I_n]) => RSinv HK _.
 apply: val_inj; rewrite -[val u]HK -[val v]HK; congr (RSinv _).
 rewrite {RSinv HK} /RStab /=. apply: pqpair_inj => /=.
 have:= (is_tableau_RS u). have:= is_tableau_RS v.
@@ -272,14 +271,14 @@ rewrite Schur_tabsh_readingE /polylang /commword; apply eq_bigl => i /=.
 by rewrite inE.
 Qed.
 
-(** ** Commutative immage of freeSchur language *)
+(** ** Commutative image of freeSchur language *)
 Lemma Schur_freeSchurE d (Q : stdtabn d) :
   Schur (shape_deg Q) = polylang R (freeSchur Q).
 Proof using .
 rewrite SchurE -tabword_of_tuple_freeSchur.
 rewrite /polylang (big_imset _ (@tabword_of_tuple_freeSchur_inj _ Q)) /=.
 apply: eq_bigr => t _; apply: perm_commword.
-rewrite perm_sym; exact: perm_RS.
+by rewrite perm_sym; exact: perm_RS.
 Qed.
 
 
@@ -375,30 +374,19 @@ rewrite big_trivIset /=; first last.
   rewrite /disjoint; apply/pred0P => w /=.
   rewrite !inE; apply: negbTE; move: Hdiff; apply: contra.
   by move=> /andP [/eqP -> /eqP ->].
-
-transitivity (\sum_(Q in LRsupport) polylang R (freeSchur Q));
-  last by apply eq_bigr=> w _; rewrite Schur_freeSchurE.
-
-rewrite (big_setID [set set0]) /=.
-rewrite [X in X + _](_ : _ = 0) ?add0r; first last.
-  rewrite (eq_bigr (fun=> 0)); first by rewrite sumr_const mul0rn.
-  move=> i; rewrite inE => /andP [_]; rewrite inE => /eqP ->.
-  by rewrite /polylang big_set0.
-
+under [RHS]eq_bigr do rewrite Schur_freeSchurE.
+rewrite (big_setID [set set0]) /= big1 ?add0r; first last => [i|].
+  rewrite inE => /andP [_]; rewrite inE => /eqP ->.
+  by rewrite big_set0.
 rewrite (big_setID [set x | freeSchur x == set0]) /=.
-rewrite [X in X + _](_ : _ = 0) ?add0r; first last.
-  rewrite (eq_bigr (fun=> 0)); first by rewrite sumr_const mul0rn.
-  move=> i; rewrite inE => /andP [_]; rewrite inE => /eqP ->.
+rewrite [X in X + _]big1 ?add0r; first last => [i|].
+  rewrite inE => /andP [_]; rewrite inE => /eqP ->.
   by rewrite /polylang big_set0.
-
-rewrite -big_imset /=; first last.
-  move=> T1 T2 /=.
+rewrite -big_imset /=; first last => [T1 T2 /=|].
   rewrite inE => /andP []; rewrite inE => /set0Pn [x1 Hx1] _ _.
   move: Hx1; rewrite inE => /eqP Hx1 /setP/(_ x1); rewrite !inE Hx1.
   rewrite eq_refl => /esym/eqP; exact: val_inj.
-
-apply: eq_bigl => s; rewrite !inE.
-apply/idP/idP.
+apply: eq_bigl => s; rewrite !inE; apply/idP/idP.
 + move=> /andP [Hn0 /imsetP [Q HQ Hs]]; subst s.
   by rewrite imset_f //= inE HQ inE Hn0.
 + move/imsetP => [Q]; rewrite 2!inE => /andP [H1 H2] ->.
@@ -416,7 +404,7 @@ Lemma hyper_stdtabnP d (P : 'P_d) : is_stdtab_of_n d (hyper_stdtab P).
 Proof using .
 rewrite /is_stdtab_of_n /= hyper_stdtabP /= size_RS.
 rewrite size_std -evalseq_eq_size (evalseq_hyper_yam (intpartnP P)).
-by rewrite intpartn_sumn.
+by rewrite sumn_intpartn.
 Qed.
 Canonical hyper_stdtabn d (P : 'P_d) := StdtabN (hyper_stdtabnP P).
 
@@ -448,12 +436,14 @@ rewrite !shaped_hyper_stdtabnP => ->.
 move : (LRsupport _ _) => LR.
 rewrite (partition_big (@shape_deg (d1 + d2)) predT) //=.
 apply: eq_bigr => P _.
-rewrite (eq_bigr (fun i => (Schur P))); last by move=> T /andP [_ /eqP ->].
+under eq_bigr => T /andP [_ /eqP ->] do [].
 rewrite sumr_const; congr (_ *+ _).
 by apply: eq_card => i /=; rewrite unfold_in inE.
 Qed.
 
-Lemma size_RSmapinv2_yam d (Typ : inhOrdType) (tab : seq (seq Typ)) (T : stdtabn d) :
+Lemma size_RSmapinv2_yam d
+      (disp : unit) (Typ : inhOrderType disp)
+      (tab : seq (seq Typ)) (T : stdtabn d) :
   size (RSmapinv2 (tab, yam_of_stdtab T)) = d.
 Proof using .
 rewrite -{2}(size_tab_stdtabn T) -size_yam_of_stdtab // /RSmapinv2 /=.
@@ -474,7 +464,7 @@ Hypothesis Hsh2 : shape U2 = shape T2.
 
 Section TakeDrop.
 
-Variable T : inhOrdType.
+Context {disp : unit} {T : inhOrderType disp}.
 
 Lemma RStabE (w : seq T) : (RStab w).1 = (RS w).
 Proof using . by rewrite RStabmapE. Qed.
@@ -536,7 +526,7 @@ Qed.
 
 End TakeDrop.
 
-Lemma changeUTK (T : inhOrdType) (w : seq T) :
+Lemma changeUTK (disp : unit) (T : inhOrderType disp) (w : seq T) :
   (take d1 w) \in langQ U1 ->
   (drop d1 w) \in langQ U2 ->
   changeUT U1 U2 (changeUT T1 T2 w) = w.

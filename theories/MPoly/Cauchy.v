@@ -16,28 +16,29 @@
 (** * Cauchy formula for symmetric polynomials
 
 In this file we fix two non zero natural [m] and [n] and consider the two sets
-of variables [X := (x_i)_{i<m}] and [Y := (y_j)_{j<n}]. We also consider the
-variable [z_{i,j} := x_i * y_j].
+of variables [X := (x_i)_{i < m}] and [Y := (y_j)_{j < n}]. We also consider
+the variables [z_{i,j} := x_i * y_j].
 
 We encode polynomial in [X \cup Y] as polynomials in [X] whose coefficient are
 polynomials in [Y]. We denote by [mz] a monomial in the [Z].
 
-- [monX mz]     == the monomial in [X], obtained by setting all the [x_i] to [1].
+- [monX mz]     == the monomial in [X] obtained by setting all the [y_i] to [1].
 - [monsY mz]    == the [m.-tuple] of whose [i]-th element is the monomial in [Y]
                    obtained by putting [x_i] to [1] and all the others to [0].
 - [Ymon ms]     == given [ms : m.-tuple 'X_{1.. n}] assemble them to get a
-                   monomial  in the [Z].
+                   monomial in the [Z].
 - [polXY m n R] == polynomial in [m] variable whose coefficients are polynomials
                    in [n] over the commutative ring [R]. This is canonically a
-                   [AlgType] over [R].
-- [polXY_scale c p] == ring multiplication for elements of [polXY m n R]
+                   [algType] over [R].
+- [polXY_scale c p] == base ring multiplication for elements of [polXY m n R]
 - [p(X)]        == the image of [p] by the canonical inclusion algebra morphism
                    [polX -> polXY]
 - [p(Y)]        == the image of [p] by the canonical inclusion algebra morphism
                    [polY -> polXY]
-- [p(XY)]       == the polynomial of [polXY] from a polynomials in the [Z_{i,j}].
-- [Cauchy_kernel d] == the Cauchy kernel in degree [d] that is the sum of all
-                   monomial in [x_i*y_i] of degree [d] that is ['h_d(XY)]
+- [p(XY)]       == the polynomial in [polXY] from a polynomials in the [Z_{i,j}].
+- [Cauchy_kernel d] == the Cauchy reproducing kernel in degree [d], that is
+                   the sum of all monomial in [x_i*y_i] of degree [d]
+                   which is defined as ['h_d(XY)]
 - [co_hp la p] == if [p] is symmetric in [X], returns the coefficient of [p] on
                    ['hp[la]]
 - [co_hpXY la mu p] == if [p] is symmetric both in [X] and [Y], returns the
@@ -57,6 +58,9 @@ From SsrMultinomials Require Import ssrcomplements mpoly.
 Require Import tools partition.
 Require Import antisym Schur_mpoly Schur_altdef sympoly homogsym permcent.
 
+Require ordtype.
+Local Notation inh := ordtype.Inhabited.Exports.inh.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -71,12 +75,10 @@ Proof. exact: Num.Theory.char_num. Qed.
 #[local] Hint Resolve char0_algC char0_rat : core.
 
 
-Lemma mprodXnE R nv (I : Type) (F : I -> 'X_{1..nv}) P m (r : seq _) :
-  \prod_(i <- r | P i) 'X_[R, F i] ^+ m i = 'X_[\sum_(i <- r | P i) (F i *+ m i)].
-Proof.
-elim: r => [|x r ih]; first by rewrite !big_nil mpolyX0.
-by rewrite !big_cons; case: (P x); rewrite ?(mpolyXD, mpolyXn) ih.
-Qed.
+Reserved Notation "p '(Y)'"  (at level 20, format "p '(Y)'").
+Reserved Notation "p '(X)'"  (at level 20, format "p '(X)'").
+Reserved Notation "p '(XY)'" (at level 20, format "p '(XY)'").
+
 
 (** ** Polynomials in two sets of variables *)
 Section CauchyKernel.
@@ -119,7 +121,7 @@ Qed.
 
 End Big.
 
-Definition monX (mon : 'X_{1.. m*n}) :=
+Definition monX (mon : 'X_{1.. m*n}) : 'X_{1.. m} :=
   [multinom (\sum_(j < n) mon (mxvec_index i j))%N | i < m].
 
 Lemma mdeg_monX mon : mdeg (monX mon) = mdeg mon.
@@ -227,8 +229,8 @@ Canonical polY_XY_linear     := AddLinear  polY_XY_is_lrmorphism.
 Canonical polY_XY_lrmorphism := LRMorphism polY_XY_is_lrmorphism.
 
 
-Notation "p '(Y)'" := (polY_XY p) (at level 20, format "p '(Y)'").
-Notation "p '(X)'" := (polX_XY p) (at level 20, format "p '(X)'").
+Notation "p '(Y)'" := (polY_XY p).
+Notation "p '(X)'" := (polX_XY p).
 
 Lemma polyXY_scale p q : p(X) * q(Y) = q *: p(X).
 Proof. by rewrite mulrC mul_mpolyC. Qed.
@@ -242,7 +244,7 @@ Qed.
 Definition evalXY : polZ -> polXY :=
   mmap ((@mpolyC m _) \o (@mpolyC n R))
        (fun i => 'X_((vecmx_index i).1) (X) * 'X_((vecmx_index i).2) (Y)).
-Notation "p '(XY)'" := (evalXY p) (at level 20, format "p '(XY)'").
+Notation "p '(XY)'" := (evalXY p).
 
 Lemma evalXY_is_lrmorphism : lrmorphism evalXY.
 Proof.
@@ -316,11 +318,10 @@ Lemma famY_subproof (mz : 'X_{1.. (m * n) < d.+1}) i :
 Proof.
 apply: (leq_ltn_trans _ (bmdeg mz)).
 rewrite /mdeg /monsY tnth_mktuple !big_tuple big_mxvec_index /=.
-rewrite (eq_bigr (fun j => tnth mz (mxvec_index i j))); first last.
-  by move=> j _; rewrite tnth_mktuple -mnm_tnth.
+under eq_bigr do rewrite tnth_mktuple mnm_tnth.
 by rewrite (bigD1 i) //= leq_addr.
 Qed.
-Definition famY mz := [ffun i => BMultinom (famY_subproof mz i)].
+Definition famY mz := [ffun i : 'I_m => BMultinom (famY_subproof mz i)].
 Let famYinv_fun (ff : {ffun 'I_m -> 'X_{1.. n < d.+1}}) :=
   let mz := [multinom (ff (vecmx_index i).1 (vecmx_index i).2) | i < m * n]
   in if (mdeg mz < d.+1)%N then mz else 0%MM.
@@ -349,7 +350,7 @@ case: (altP (mdeg mon =P d)) => Hdeg; first last.
   - rewrite mcoeff_symm //.
     suff /negbTE -> : ~~ perm_eq (mpart (n := m) la) mon by rewrite mulr0.
     apply/negP => /perm_sumn.
-    rewrite sumn_mpart // intpartn_sumn sumnE -/(mdeg _) => Hd.
+    rewrite sumn_mpart // sumn_intpartn sumnE -/(mdeg _) => Hd.
     by rewrite -Hd eq_refl in Hdeg.
   - by rewrite mcoeff0 mulr0.
 have Hpm : is_part_of_n d (partm mon) by rewrite /= intpartP andbT sumn_partm Hdeg.
@@ -380,18 +381,14 @@ rewrite addrC big1 ?add0r; first last.
   move=> i /andP [_ /negbTE Hneq].
   rewrite evalXY_XE -rmorph_prod /= polyXY_scale.
   by rewrite linearZ /= /polX_XY map_mpolyX mcoeffX Hneq mulr0.
-rewrite (eq_bigl (fun mZ : 'X_{1.. _ < _} => monX mZ == mon)); first last.
-  move=> i; rewrite andbC; case: eqP => //= Heq.
-  by rewrite -{2}Hdeg -Heq mdeg_monX eq_refl.
-rewrite (eq_bigr (fun mZ : 'X_{1.. _ < _} =>
-                    \prod_(i < m) 'X_[tnth (monsY mZ) i])); first last.
-  move=> mz Hmz; rewrite evalXY_XE -rmorph_prod /= polyXY_scale.
-  by rewrite linearZ /= /polX_XY map_mpolyX mcoeffX Hmz mulr1.
-rewrite (eq_bigr (fun i : 'I_m => symh_pol_bound n R d.+1 (tnth mon i)));
-    first last.
-  move=> i _; apply: symh_pol_any.
-  rewrite ltnS -Hdeg /mdeg big_tuple (bigD1 i) //=.
-  exact: leq_addr.
+under eq_bigl=> i do [rewrite andb_idl;
+  last by move=> /eqP; rewrite -{3}Hdeg => <-; rewrite mdeg_monX].
+under [LHS]eq_bigr => mz Hmz.
+  rewrite evalXY_XE -rmorph_prod /= polyXY_scale.
+  by rewrite linearZ /= /polX_XY map_mpolyX mcoeffX Hmz mulr1 over.
+under [RHS]eq_bigr => i _ do
+  [rewrite (@symh_pol_any _ _ d.+1) //;
+     last by rewrite ltnS -Hdeg /mdeg big_tuple (bigD1 i) // leq_addr].
 rewrite bigA_distr_big_dep => /=.
 rewrite (reindex (famY (d := d))) /=; first last.
   exists (famYinv (d := d)).
@@ -414,8 +411,7 @@ apply eq_big => [mz | mz /eqP Hmz].
   + apply/mnmP => i.
     have := Hfam i; rewrite unfold_in /= !mnm_tnth => /eqP <-.
     by rewrite ffunE /= !tnth_mktuple mdegE; apply eq_bigr => j _; rewrite mnmE.
-- apply eq_bigr => i _.
-  by rewrite ffunE /= !tnth_mktuple.
+- by apply eq_bigr => i _; rewrite ffunE /= !tnth_mktuple.
 Qed.
 
 Lemma Cauchy_homsymm_homsymh :
@@ -446,7 +442,7 @@ Qed.
 Lemma Cauchy_kernel_symmetric : Cauchy_kernel d \is symmetric.
 Proof.
 rewrite Cauchy_symm_symh; apply rpred_sum => la _.
-by apply rpredZ; apply sympol_is_symmetric.
+by apply rpredZ; apply sympolP.
 Qed.
 
 (** Unused lemma *)
@@ -454,7 +450,7 @@ Lemma Cauchy_kernel_coeff_symmetric mon :
   (Cauchy_kernel d)@_mon \is symmetric.
 Proof.
 rewrite Cauchy_symm_symh linear_sum /=; apply rpred_sum => la _.
-rewrite linearZ /= rpredM ?sympol_is_symmetric //.
+rewrite linearZ /= rpredM ?sympolP //.
 case: (ssrnat.leqP (size la) m) => [/mcoeff_symm -> | /symm_oversize ->].
 - by case: (perm_eq _ _) => /=; [exact: rpred1 | exact: rpred0].
 - by rewrite mcoeff0 rpred0.
@@ -474,9 +470,10 @@ Qed.
 
 End CauchyKernel.
 
-Notation "p '(Y)'" := (@polY_XY _ _ _ p) (at level 20, format "p '(Y)'").
-Notation "p '(X)'" := (@polX_XY _ _ _ p) (at level 20, format "p '(X)'").
-Notation "p '(XY)'" := (@evalXY _ _ _ p) (at level 20, format "p '(XY)'").
+Notation "p '(Y)'" := (@polY_XY _ _ _ p).
+Notation "p '(X)'" := (@polX_XY _ _ _ p).
+Notation "p '(XY)'" := (@evalXY _ _ _ p).
+
 
 Section CauchyKernelField.
 Variable R : fieldType.
@@ -505,7 +502,7 @@ Hypothesis Hd : (d <= n)%N.
 Local Notation ratF := [numFieldType of rat].
 Local Notation algCF := [numFieldType of algC].
 Local Notation HSC := {homsym algC[n, d]}.
-Local Notation HSR := {homsym rat[n, d]}.
+Local Notation HSQ := {homsym rat[n, d]}.
 Local Notation polXY := (polXY n0 n0 algCF).
 Local Notation pol := {mpoly algC[n]}.
 Local Notation "p '(Y)'" := (@polY_XY n0 n0 _ p)
@@ -513,8 +510,10 @@ Local Notation "p '(Y)'" := (@polY_XY n0 n0 _ p)
 Local Notation "p '(X)'" := (@polX_XY n0 n0 _ p)
                              (at level 20, format "p '(X)'").
 
-Local Notation "''hsF[' la ]" := ('hs[la] : HSC).
-Local Notation "''hsR[' la ]" := ('hs[la] : HSR).
+Local Notation "''hsC[' la ]" := ('hs[la] : HSC).
+Local Notation "''hsQ[' la ]" := ('hs[la] : HSQ).
+Local Notation "''hpC[' la ]" := ('hp[la] : HSC).
+Local Notation "''hpQ[' la ]" := ('hp[la] : HSQ).
 
 
 Definition co_hp (la : 'P_d) : pol -> algC :=
@@ -529,7 +528,7 @@ Lemma scale_co_hp la p a : co_hp la (a *: p) = a * co_hp la p.
 Proof. by rewrite /co_hp /= linearZ homsymdotZl. Qed.
 Lemma co_hp_hp la mu : co_hp la 'hp[mu] = (zcard mu)%:R * (mu == la)%:R.
 Proof using Hd.
-by rewrite /co_hp /= -![prod_gen _ _]/(homsym 'hp[_]) in_homsymE homsymdotp.
+by rewrite /co_hp /= -![prod_gen _ _]/(homsym 'hp[_]) in_homsymE homsymdotpp.
 Qed.
 
 Lemma co_hpXY_is_additive la mu : additive (co_hpXY la mu).
@@ -551,13 +550,13 @@ Proof. by rewrite /co_hpXY; unlock; rewrite /= co_hpYE scale_co_hp mulrC. Qed.
 
 Lemma coord_zsympsps (la mu : 'P_d) :
   (\sum_nu
-    (coord 'hp (enum_rank la) 'hsF[nu]) *
-    ((zcard mu)%:R * coord 'hp (enum_rank mu) 'hsF[nu]))
+    (coord 'hp (enum_rank la) 'hsC[nu]) *
+    ((zcard mu)%:R * coord 'hp (enum_rank mu) 'hsC[nu]))
   = (la == mu)%:R.
 Proof using Hd.
-have to_p (nu : 'P_d) : ('hsF[nu] : HSC) \in span 'hp.
+have to_p (nu : 'P_d) : ('hsC[nu] : HSC) \in span 'hp.
   by rewrite (span_basis (symbp_basis Hd _)) //= memvf.
-have : \sum_(nu : 'P_d) 'hsF[nu](X) * 'hsF[nu](Y) =
+have : \sum_(nu : 'P_d) 'hsC[nu](X) * 'hsC[nu](Y) =
        \sum_(nu : 'P_d) 'hp[nu](X) * ((zcard nu)%:R^-1 *: 'hp[nu](Y)).
   by rewrite -Cauchy_homsyms_homsyms Cauchy_homsymp_zhomsymp.
 have sum_coord (p : HSC) :
@@ -565,11 +564,11 @@ have sum_coord (p : HSC) :
   \sum_px coord 'hp (enum_rank px) p *: 'hp[px] :> pol.
   rewrite (reindex _ (onW_bij _ (@enum_rank_bij _))) /=.
   rewrite !linear_sum /=; apply eq_bigr => i _.
-  rewrite (nth_map (rowpartn d)) /= -?enum_val_nth // ?enum_rankK //.
+  rewrite (nth_map inh) /= -?enum_val_nth // ?enum_rankK //.
   by rewrite -cardE ltn_ord.
 rewrite (eq_bigr (fun nu : 'P_d =>
-                    (\sum_px (coord 'hp (enum_rank px) 'hsF[nu]) *: 'hp[px])(X) *
-                    (\sum_py (coord 'hp (enum_rank py) 'hsF[nu]) *: 'hp[py])(Y)
+                    (\sum_px (coord 'hp (enum_rank px) 'hsC[nu]) *: 'hp[px])(X) *
+                    (\sum_py (coord 'hp (enum_rank py) 'hsC[nu]) *: 'hp[py])(Y)
         )); first last.
   move=> nu _; rewrite {1 2}(coord_span (to_p nu)).
   by rewrite linear_sum; congr ((_)(X) * (_)(Y)); rewrite sum_coord.
@@ -592,8 +591,8 @@ rewrite mul1r !mulr_sumr => -> .
 apply eq_bigr => nu _.
 rewrite co_hprXYE.
 have dot_sumhp (eta tau : 'P_d) :
-  co_hp eta (\sum_px coord 'hp (enum_rank px) 'hsF[tau] *: 'hp[px]) =
-  coord 'hp (enum_rank eta) 'hsF[tau] * (zcard eta)%:R.
+  co_hp eta (\sum_px coord 'hp (enum_rank px) 'hsC[tau] *: 'hp[px]) =
+  coord 'hp (enum_rank eta) 'hsC[tau] * (zcard eta)%:R.
   rewrite !raddf_sum /= (bigD1 eta) //=.
   rewrite -![prod_gen _ _]/(homsym 'hp[_]).
   rewrite scale_co_hp co_hp_hp // eq_refl mulr1.
@@ -608,15 +607,15 @@ Qed.
 
 Lemma coord_zsymspsp (la mu : 'P_d) :
   (\sum_nu
-    (coord 'hp (enum_rank nu) 'hsF[la]) *
-    ((zcard nu)%:R * coord 'hp (enum_rank nu) 'hsF[mu]))
+    (coord 'hp (enum_rank nu) 'hsC[la]) *
+    ((zcard nu)%:R * coord 'hp (enum_rank nu) 'hsC[mu]))
   = (la == mu)%:R.
 Proof using Hd.
 pose matsp : 'M[algCF]_#|{:'P_d}| :=
-  \matrix_(i, j < #|{:'P_d}|) (coord 'hp i 'hsF[enum_val j]).
+  \matrix_(i, j < #|{:'P_d}|) (coord 'hp i 'hsC[enum_val j]).
 pose matzsp : 'M[algCF]_#|{:'P_d}| :=
   \matrix_(i, j < #|{:'P_d}|)
-   ((zcard (enum_val j))%:R * (coord 'hp j 'hsF[enum_val i])).
+   ((zcard (enum_val j))%:R * (coord 'hp j 'hsC[enum_val i])).
 have: matsp *m matzsp = 1%:M.
   apply/matrixP => i j /=.
   rewrite /matsp /matzsp /= !mxE.
@@ -633,43 +632,28 @@ by rewrite !mxE !enum_rankK mulrC.
 Qed.
 
 (** ** Schur function are orthonormal *)
-Theorem homsymdotss la mu : '[ 'hsF[la] | 'hsF[mu] ] = (la == mu)%:R.
+Theorem homsymdotss la mu : '[ 'hsC[la] | 'hsC[mu] ] = (la == mu)%:R.
 Proof using Hd.
-have to_p (nu : 'P_d) : 'hsF[nu] \in span 'hp.
+have to_p (nu : 'P_d) : 'hsC[nu] \in span 'hp.
   by rewrite (span_basis (symbp_basis Hd _)) // memvf.
 rewrite (coord_span (to_p la)) (coord_span (to_p mu)).
 transitivity
-  (\sum_i (coord 'hp i 'hsF[la]) * (zcard (enum_val i))%:R * (coord 'hp i 'hsF[mu])).
-  rewrite homsymdot_suml; apply eq_bigr => /= l _.
-  rewrite homsymdotZl homsymdot_sumr (bigD1 l) //= big1 ?addr0; first last.
-    move=> m /negbTE Hlm; rewrite homsymdotZr.
-    rewrite [X in '[X | _]](nth_map (rowpartn d)) -?cardE ?ltn_ord //.
-    rewrite [X in '[_ | X]](nth_map (rowpartn d)) -?cardE ?ltn_ord //.
-    rewrite homsymdotp // nth_uniq ?enum_uniq -?cardE ?ltn_ord // eq_sym.
-    by rewrite (inj_eq (@ord_inj _)) Hlm !mulr0.
-  rewrite homsymdotZr mulrA.
-  rewrite [X in '[X | _]](nth_map (rowpartn d)) -?cardE ?ltn_ord //.
-  rewrite [X in '[_ | X]](nth_map (rowpartn d)) -?cardE ?ltn_ord //.
-  rewrite homsymdotp // eq_refl mulr1.
-  rewrite -enum_val_nth ![_ * (zcard _)%:R]mulrC mulrA; congr (_ * _ * _).
-  suff -> : coord 'hp l 'hsF[mu] = ratr (coord 'hp l ('hs[mu] : HSR)).
-    by apply/CrealP; apply Creal_Crat; apply Crat_rat.
-  rewrite -(map_homsyms (ratr_rmorphism algCF)).
-  have to_pR (nu : 'P_d) : 'hsR[nu] \in span 'hp.
-    by rewrite (span_basis (symbp_basis Hd _)) // memvf.
-  rewrite {1}(coord_span (to_pR mu)) raddf_sum.
-  rewrite (eq_bigr
-             (fun i : 'I_#|{:'P_d}| => ratr (coord 'hp i 'hsR[mu]) *: ('hp)`_i )).
-    rewrite coord_sum_free //.
-    exact: (basis_free (symbp_basis Hd _)).
-  move=> i _; rewrite /= scale_map_homsym.
-  have /= := map_homsymbp (@ratr_rmorphism algCF) n0 d.
-  move=> /(congr1 (fun p : _.-tuple _ => p`_i)) /= => <-.
-  congr (_ *: _); apply esym; apply nth_map.
-  by rewrite size_map -cardE ltn_ord.
-rewrite (reindex _ (onW_bij _ (@enum_rank_bij _))) /=.
-rewrite -coord_zsymspsp //; apply eq_bigr => /= nu _.
-by rewrite enum_rankK mulrA.
+  (\sum_i (coord 'hp i 'hsC[la]) *
+          (zcard (enum_val i))%:R * (coord 'hp i 'hsC[mu])); first last.
+  rewrite (reindex _ (onW_bij _ (@enum_rank_bij _))) /=.
+  rewrite -coord_zsymspsp //; apply eq_bigr => /= nu _.
+  by rewrite enum_rankK mulrA.
+rewrite homsymdot_suml; apply eq_bigr => /= l _.
+rewrite homsymdotZl homsymdot_sumr -mulrA; congr (_ * _).
+transitivity
+  (\sum_(i < #|{:'P_d}|)
+    (coord 'hp i 'hsC[mu])^* * (zcard (enum_val l))%:R * (i == l)%:R).
+  apply: eq_bigr => i _; rewrite homsymdotZr -mulrA; congr (_ * _).
+  rewrite !(nth_map inh _ (fun l => 'hp[l])) -?cardE ?ltn_ord //.
+  by rewrite -!enum_val_nth homsymdotpp // (inj_eq enum_val_inj) eq_sym.
+rewrite (bigD1 l) //= big1 ?addr0; last by move=> m /negbTE ->; rewrite mulr0.
+rewrite eq_refl mulr1 mulrC; congr (_ * _).
+by rewrite -coord_map_homsym ?map_homsymbp ?symbp_basis // map_homsyms.
 Qed.
 
 End Scalar.
